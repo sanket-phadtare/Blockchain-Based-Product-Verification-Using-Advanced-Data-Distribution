@@ -27,18 +27,45 @@ const abi = [
 	{
 		"anonymous": false,
 		"inputs": [
-			{"indexed": true, "internalType": "uint256", "name": "p_id", "type": "uint256"},
-			{"indexed": false, "internalType": "bytes32", "name": "p_merkleRoot", "type": "bytes32"},
-			{"indexed": false, "internalType": "string", "name": "p_cid", "type": "string"}
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "p_id",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "p_merkleRoot",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "p_cid",
+				"type": "string"
+			}
 		],
 		"name": "ProductAdded",
 		"type": "event"
 	},
 	{
 		"inputs": [
-			{"internalType": "uint256", "name": "p_id", "type": "uint256"},
-			{"internalType": "bytes32", "name": "p_merkleRoot", "type": "bytes32"},
-			{"internalType": "string", "name": "p_cid", "type": "string"}
+			{
+				"internalType": "uint256",
+				"name": "p_id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "p_merkleRoot",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "p_cid",
+				"type": "string"
+			}
 		],
 		"name": "addData",
 		"outputs": [],
@@ -47,26 +74,58 @@ const abi = [
 	},
 	{
 		"inputs": [
-			{"internalType": "uint256", "name": "", "type": "uint256"}
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
 		],
 		"name": "data",
 		"outputs": [
-			{"internalType": "uint256", "name": "product_id", "type": "uint256"},
-			{"internalType": "bytes32", "name": "merkleRoot", "type": "bytes32"},
-			{"internalType": "string", "name": "cid", "type": "string"}
+			{
+				"internalType": "uint256",
+				"name": "product_id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "merkleRoot",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "cid",
+				"type": "string"
+			}
 		],
 		"stateMutability": "view",
 		"type": "function"
 	},
 	{
 		"inputs": [
-			{"internalType": "uint256", "name": "pr_id", "type": "uint256"}
+			{
+				"internalType": "uint256",
+				"name": "pr_id",
+				"type": "uint256"
+			}
 		],
 		"name": "getData",
 		"outputs": [
-			{"internalType": "uint256", "name": "", "type": "uint256"},
-			{"internalType": "bytes32", "name": "", "type": "bytes32"},
-			{"internalType": "string", "name": "", "type": "string"}
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
 		],
 		"stateMutability": "view",
 		"type": "function"
@@ -94,7 +153,7 @@ app.post('/', async function(req,res)
         const hash34 = crypto.createHash('sha256').update(hash3+hash4).digest('hex');
 
         const merkleroot = crypto.createHash('sha256').update(hash12+hash34).digest('hex');
-        const merklerootBytes32 = Buffer.from(merkleroot, 'hex');
+       
 
         const ipfsData =
         {
@@ -115,7 +174,7 @@ app.post('/', async function(req,res)
 
         console.log("Transaction under process");
 
-        const txnData = contract.methods.addData(product_id , merklerootBytes32, ipfs_cid).encodeABI();
+        const txnData = contract.methods.addData(product_id , merkleroot, ipfs_cid).encodeABI();
         const gasPrice = await web3.eth.getGasPrice();
         const nonce = await web3.eth.getTransactionCount(wallet_address);
         const txnObject = 
