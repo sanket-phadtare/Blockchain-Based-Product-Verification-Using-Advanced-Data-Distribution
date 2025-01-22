@@ -81,9 +81,6 @@ const wallet_address = process.env.WALLET_ADDRESS;
 app.post('/', async function(req,res)
 {
     
-   
-    
-
     try
     {
         const {product_id, product_name, product_mdate, product_batch} = req.body;
@@ -150,6 +147,40 @@ app.post('/', async function(req,res)
         console.log("Error",error);
     }
 
+
+});
+
+
+
+app.post('/verify', async function(req,res)
+{
+    const {product_id} = req.body;
+    
+    try
+    {
+        const data = await contract.methods.getData(product_id).call();
+        
+        if (!data || data.length === 0) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+
+       const p_merkle = data[1];
+       const p_cid = data[2];
+
+       const url = `https://gateway.pinata.cloud/ipfs/${p_cid}`;
+
+        const response = await axios.get(url);
+        const jsonData = response.data;
+        console.log('Fetched JSON Data:', jsonData);
+       
+       res.json("Data fetched for verification");
+        
+
+    }
+    catch(error)
+    {
+        console.log("Error: ",error);
+    }
 
 });
 
