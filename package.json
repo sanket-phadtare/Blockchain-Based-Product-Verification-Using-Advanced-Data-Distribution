@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ipfs-http-client": "^60.0.1",
+    "pg": "^8.13.1",
+    "web3": "^4.16.0"
+  }
+}
