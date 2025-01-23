@@ -223,14 +223,39 @@ app.post('/verify', async function(req,res)
             return res.status(404).json({ message: 'Product not found' });
         }
 
-       const p_merkle = data[1];
-       const p_cid = data[2];
+		
+       	const block_merkle = data[1];
+       	const p_cid = data[2];
 
-       const url = `https://gateway.pinata.cloud/ipfs/${p_cid}`;
+       	const url = `https://gateway.pinata.cloud/ipfs/${p_cid}`;
 
         const response = await axios.get(url);
         const jsonData = response.data;
+
+		const hash1 = crypto.createHash('sha256').update(product_id).digest('hex'); //user input hash (Leaf Hash)
+		const hash2 = crypto.createHash('sha256').update(jsonData.product_name).digest('hex'); //sibling hash (Leaf + sibling) = Parent1
+		const hash3 = crypto.createHash('sha256').update(jsonData.product_mdate).digest('hex');
+		const hash4 = crypto.createHash('sha256').update(jsonData.product_batch).digest('hex');
+
+		const verifyparent1 = crypto.createHash('sha256').update(hash1+hash2).digest('hex');
+		const verifyparent2 = crypto.createHash('sha256').update(hash3+hash4).digest('hex');
+		const verifymarkleroot = crypto.createHash('sha256').update(verifyparent1+verifyparent2).digest('hex'); //calculated merkelroot for verification
+	
+
+
         console.log('Fetched JSON Data:', jsonData);
+		console.log("Blockchain Merkel-Root = "+block_merkle);
+		console.log("Verification Mekrle Root = "+verifymarkleroot);
+
+		if(block_merkle === verifymarkleroot)
+		{
+			console.log("Authentic Product");
+		}
+		else
+		{
+			console.log("Tampered Product");
+		}
+		
        
        res.json("Data fetched for verification");
         
