@@ -27,109 +27,36 @@ const abi = [
 	{
 		"anonymous": false,
 		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "uint256",
-				"name": "p_id",
-				"type": "uint256"
-			},
-			{
-				"indexed": false,
-				"internalType": "string",
-				"name": "p_merkleRoot",
-				"type": "string"
-			},
-			{
-				"indexed": false,
-				"internalType": "string",
-				"name": "p_cid",
-				"type": "string"
-			}
-		],
-		"name": "ProductAdded",
-		"type": "event"
+			{"indexed": true, "internalType": "uint256", "name": "p_id", "type": "uint256"},
+			{"indexed": false, "internalType": "string", "name": "p_merkleRoot", "type": "string"},
+			{"indexed": false, "internalType": "string", "name": "p_cid", "type": "string"}
+		],   "name": "ProductAdded", "type": "event"
 	},
 	{
 		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "p_id",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "p_merkleRoot",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "p_cid",
-				"type": "string"
-			}
-		],
-		"name": "addData",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
+			{"internalType": "uint256", "name": "p_id", "type": "uint256"},
+			{"internalType": "string", "name": "p_merkleRoot", "type": "string"},
+			{"internalType": "string", "name": "p_cid", "type": "string"}
+		],   "name": "addData", "outputs": [], "stateMutability": "nonpayable", "type": "function"
 	},
 	{
 		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
+			{"internalType": "uint256", "name": "", "type": "uint256"}
 		],
-		"name": "data",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "product_id",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "merkleRoot",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "cid",
-				"type": "string"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
+		"name": "data","outputs": [
+			{"internalType": "uint256", "name": "product_id", "type": "uint256"},
+			{"internalType": "string", "name": "merkleRoot", "type": "string"},
+			{"internalType": "string", "name": "cid", "type": "string"}
+		],"stateMutability": "view", "type": "function"
 	},
 	{
 		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "pr_id",
-				"type": "uint256"
-			}
-		],
-		"name": "getData",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "",
-				"type": "string"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	}
+			{"internalType": "uint256", "name": "pr_id", "type": "uint256"}
+		],   "name": "getData", "outputs": [
+			{"internalType": "uint256", "name": "", "type": "uint256"},
+			{"internalType": "string", "name": "", "type": "string"},
+			{"internalType": "string", "name": "","type": "string"}
+		],   "stateMutability": "view", "type": "function"}
 ];
 
 const contract_address = process.env.CONTRACT_ADDRESS;
@@ -137,7 +64,7 @@ const contract = new web3.eth.Contract(abi, contract_address);
 const private_key = process.env.PRIVATE_KEY;
 const wallet_address = process.env.WALLET_ADDRESS;
 
-app.post('/', async function(req,res)
+app.post('/add', async function(req,res)
 {
     
     try
@@ -224,21 +151,26 @@ app.post('/verify', async function(req,res)
         }
 
 		
-       	const block_merkle = data[1];
+       	const block_merkle = data[1]; //Merkle Root Retreived from Blockchain
        	const p_cid = data[2];
 
        	const url = `https://gateway.pinata.cloud/ipfs/${p_cid}`;
 
         const response = await axios.get(url);
-        const jsonData = response.data;
+        const jsonData = response.data; // Data Retreived from Pinata for Recalculation the Merkle Proof and generating merkle root.
 
+		//Leaf Hash
 		const hash1 = crypto.createHash('sha256').update(product_id).digest('hex'); //user input hash (Leaf Hash)
-		const hash2 = crypto.createHash('sha256').update(jsonData.product_name).digest('hex'); //sibling hash (Leaf + sibling) = Parent1
-		const hash3 = crypto.createHash('sha256').update(jsonData.product_mdate).digest('hex');
-		const hash4 = crypto.createHash('sha256').update(jsonData.product_batch).digest('hex');
 
-		const verifyparent1 = crypto.createHash('sha256').update(hash1+hash2).digest('hex');
-		const verifyparent2 = crypto.createHash('sha256').update(hash3+hash4).digest('hex');
+		//Merkel Proof
+		const hash2 = crypto.createHash('sha256').update(jsonData.product_name).digest('hex'); //sibling hash (Leaf + sibling) = Parent1 
+		const hash3 = crypto.createHash('sha256').update(jsonData.product_mdate).digest('hex'); //parent2 sibling
+		const hash4 = crypto.createHash('sha256').update(jsonData.product_batch).digest('hex'); //parent2 sibling
+
+		const verifyparent1 = crypto.createHash('sha256').update(hash1+hash2).digest('hex'); //parent1
+		const verifyparent2 = crypto.createHash('sha256').update(hash3+hash4).digest('hex'); //parent2
+
+		//Merkle Root Caluclation for Verification
 		const verifymarkleroot = crypto.createHash('sha256').update(verifyparent1+verifyparent2).digest('hex'); //calculated merkelroot for verification
 	
 
@@ -257,7 +189,7 @@ app.post('/verify', async function(req,res)
 		}
 		
        
-       res.json("Data fetched for verification");
+       res.json("Data fetched and verified");
         
 
     }
