@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import pg from 'pg';
 import axios from 'axios';
 import Web3 from 'web3';
+import { MerkleTree } from 'merkletreejs';
+import keccak256 from 'keccak256';
 
 const {Pool} = pg;
 dotenv.config();
@@ -71,15 +73,17 @@ app.post('/add', async function(req,res)
     {
         const {product_id, product_name, product_mdate, product_batch} = req.body;
     
-        const hash1 = crypto.createHash('sha256').update(product_id).digest('hex');
-        const hash2 = crypto.createHash('sha256').update(product_name).digest('hex');
-        const hash3 = crypto.createHash('sha256').update(product_mdate).digest('hex');
-        const hash4 = crypto.createHash('sha256').update(product_batch).digest('hex');
+        const leaf1 = keccak256(product_id);
+        const leaf2 = keccak256(product_name);
+        const leaf3 = keccak256(product_mdate);
+        const leaf4 = keccak256(product_batch);
 
-        const hash12 = crypto.createHash('sha256').update(hash1+hash2).digest('hex');
-        const hash34 = crypto.createHash('sha256').update(hash3+hash4).digest('hex');
+        // Construct the Merkle tree
+        const leaves = [leaf1, leaf2, leaf3, leaf4];
+        const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
 
-        const merkleroot = crypto.createHash('sha256').update(hash12+hash34).digest('hex');
+        // Generate the Merkle Root
+        const merkleroot = tree.getRoot().toString('hex');
        
 
         const ipfsData =
@@ -123,6 +127,7 @@ app.post('/add', async function(req,res)
         res.send("Data added");
         console.log('JSON successfully uploaded to Pinata!');
         console.log('CID:', response.data.IpfsHash);
+        console.log("Merkle Root:", merkleroot);
         console.log("Transaction Successfull");
 
         
@@ -159,34 +164,24 @@ app.post('/verify', async function(req,res)
         const response = await axios.get(url);
         const jsonData = response.data; // Data Retreived from Pinata for Recalculation the Merkle Proof and generating merkle root.
 
-		//Leaf Hash
-		const hash1 = crypto.createHash('sha256').update(product_id).digest('hex'); //user input hash (Leaf Hash)
+		const leaf1 = keccak256(product_id);
+        const leaf2 = keccak256(jsonData.product_name);
+        const leaf3 = keccak256(jsonData.product_mdate);
+        const leaf4 = keccak256(jsonData.product_batch);
 
-		//Merkel Proof
-		const hash2 = crypto.createHash('sha256').update(jsonData.product_name).digest('hex'); //sibling hash (Leaf + sibling) = Parent1 
-		const hash3 = crypto.createHash('sha256').update(jsonData.product_mdate).digest('hex'); //parent2 sibling
-		const hash4 = crypto.createHash('sha256').update(jsonData.product_batch).digest('hex'); //parent2 sibling
+        const leaves = [leaf1, leaf2, leaf3, leaf4];
+        const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
 
-		const verifyparent1 = crypto.createHash('sha256').update(hash1+hash2).digest('hex'); //parent1
-		const verifyparent2 = crypto.createHash('sha256').update(hash3+hash4).digest('hex'); //parent2
+        // Verify the Merkle Root with the block Merkle Root
+        const verifyMerkleRoot = tree.getRoot().toString('hex');
+        console.log("Blockchain Merkle Root:", block_merkle);
+        console.log("Calculated Merkle Root:", verifyMerkleRoot);
 
-		//Merkle Root Caluclation for Verification
-		const verifymarkleroot = crypto.createHash('sha256').update(verifyparent1+verifyparent2).digest('hex'); //calculated merkelroot for verification
-	
-
-
-        console.log('Fetched JSON Data:', jsonData);
-		console.log("Blockchain Merkel-Root = "+block_merkle);
-		console.log("Verification Mekrle Root = "+verifymarkleroot);
-
-		if(block_merkle === verifymarkleroot)
-		{
-			console.log("Authentic Product");
-		}
-		else
-		{
-			console.log("Tampered Product");
-		}
+        if (block_merkle === verifyMerkleRoot) {
+            console.log("Authentic Product");
+        } else {
+            console.log("Tampered Product");
+        }
 		
        
        res.json("Data fetched and verified");

@@ -4,6 +4,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "ipfs-http-client": "^60.0.1",
+    "keccak256": "^1.0.6",
     "merkletreejs": "^0.4.1",
     "pg": "^8.13.1",
     "web3": "^4.16.0"
