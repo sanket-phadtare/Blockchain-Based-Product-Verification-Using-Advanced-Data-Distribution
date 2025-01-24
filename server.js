@@ -116,8 +116,8 @@ app.post('/add', async function(req,res)
         const signedTransaction = await web3.eth.accounts.signTransaction(txnObject, private_key);
         const sendTransaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
 
-        const insertQuery = `INSERT INTO product_verify (product_id, ipfs_cid, merkle_root) VALUES ($1, $2, $3)`;
-        const insertValues = [product_id, ipfs_cid, merkleroot];
+        const insertQuery = `INSERT INTO product_verify (product_id, product_name, product_mdate, product_batch) VALUES ($1, $2, $3, $4)`;
+        const insertValues = [product_id, product_name, product_mdate, product_batch];
         await pool.query(insertQuery, insertValues);
 
         res.send("Data added");
