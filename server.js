@@ -64,6 +64,23 @@ function hashWithSalt(value) {
     return { salt, hash };
 }
 
+async function uploadToIPFS(data, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await axios.post('https://api.pinata.cloud/pinning/pinJSONToIPFS', data, {
+                headers: {
+                    pinata_api_key: pinata_api,
+                    pinata_secret_api_key: pinata_secret,
+                },
+            });
+            return response.data.IpfsHash;
+        } catch (error) {
+            console.log(`Attempt ${i + 1} failed:`, error.message);
+        }
+    }
+    throw new Error("Failed to upload data to IPFS");
+}
+
 app.post('/add', async function (req, res) {
     try {
         const { product_id, product_name, product_mdate, product_batch } = req.body;
@@ -94,14 +111,9 @@ app.post('/add', async function (req, res) {
             product_mdate,
             product_batch
         };
-        const response = await axios.post('https://api.pinata.cloud/pinning/pinJSONToIPFS', ipfsData, {
-            headers: {
-                pinata_api_key: pinata_api,
-                pinata_secret_api_key: pinata_secret,
-            },
-        });
+        const ipfs_cid = await uploadToIPFS(ipfsData);
 
-        const ipfs_cid = response.data.IpfsHash;
+        
         console.log("Data added to IPFS");
 
         console.log("Connecting with Blockchain");
