@@ -6,11 +6,22 @@ import Web3 from 'web3';
 import axios from 'axios';
 import { MerkleTree } from 'merkletreejs';
 import keccak256 from 'keccak256';
+import winston from 'winston';
 
 const { Pool } = pg;
 dotenv.config();
 const app = express();
 app.use(express.json());
+
+// Setup Winston logger
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    transports: [
+        new winston.transports.Console(),
+        new winston.transports.File({ filename: 'server.log' })
+    ]
+});
 
 const pinata_api = process.env.PINATA_API_KEY;
 const pinata_secret = process.env.PINATA_API_SECRET;
@@ -25,112 +36,112 @@ const pool = new Pool({
 
 const web3 = new Web3('https://rpc-amoy.polygon.technology/');
 const abi = [
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "p_id",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bytes32",
-				"name": "p_merkleRoot",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "string",
-				"name": "p_cid",
-				"type": "string"
-			}
-		],
-		"name": "addData",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "uint256",
-				"name": "p_id",
-				"type": "uint256"
-			},
-			{
-				"indexed": false,
-				"internalType": "bytes32",
-				"name": "p_merkleRoot",
-				"type": "bytes32"
-			},
-			{
-				"indexed": false,
-				"internalType": "string",
-				"name": "p_cid",
-				"type": "string"
-			}
-		],
-		"name": "ProductAdded",
-		"type": "event"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"name": "data",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "product_id",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bytes32",
-				"name": "merkleRoot",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "string",
-				"name": "cid",
-				"type": "string"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "pr_id",
-				"type": "uint256"
-			}
-		],
-		"name": "getData",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bytes32",
-				"name": "",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "string",
-				"name": "",
-				"type": "string"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	}
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "p_id",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "p_merkleRoot",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "string",
+                "name": "p_cid",
+                "type": "string"
+            }
+        ],
+        "name": "addData",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "p_id",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "p_merkleRoot",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "p_cid",
+                "type": "string"
+            }
+        ],
+        "name": "ProductAdded",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "name": "data",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "product_id",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "merkleRoot",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "string",
+                "name": "cid",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "pr_id",
+                "type": "uint256"
+            }
+        ],
+        "name": "getData",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
 ];
 
 const contract_address = process.env.CONTRACT_ADDRESS;
@@ -156,7 +167,7 @@ async function uploadToIPFS(data, retries = 3) {
             });
             return response.data.IpfsHash;
         } catch (error) {
-            console.log(`Attempt ${i + 1} failed:`, error.message);
+            logger.error(`Attempt ${i + 1} failed to upload to IPFS: ${error.message}`);
         }
     }
     throw new Error("Failed to upload data to IPFS");
@@ -165,7 +176,7 @@ async function uploadToIPFS(data, retries = 3) {
 app.post('/add', async function (req, res) {
     try {
         const { product_id, product_name, product_mdate, product_batch } = req.body;
-        console.log("Calculating Merkle");
+        logger.info("Calculating Merkle");
 
         const saltedHash1 = hashWithSalt(product_id);
         const saltedHash2 = hashWithSalt(product_name);
@@ -196,10 +207,9 @@ app.post('/add', async function (req, res) {
         };
         const ipfs_cid = await uploadToIPFS(ipfsData);
 
-        
-        console.log("Data added to IPFS");
+        logger.info("Data added to IPFS");
 
-        console.log("Connecting with Blockchain");
+        logger.info("Connecting with Blockchain");
         const txnData = contract.methods.addData(product_id, merkleroot, ipfs_cid).encodeABI();
         const gasPrice = await web3.eth.getGasPrice();
         const nonce = await web3.eth.getTransactionCount(wallet_address);
@@ -211,7 +221,7 @@ app.post('/add', async function (req, res) {
             data: txnData
         };
 
-        console.log("Transaction Under Process...")
+        logger.info("Transaction Under Process...");
         const signedTransaction = await web3.eth.accounts.signTransaction(txnObject, private_key);
         await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
 
@@ -220,24 +230,25 @@ app.post('/add', async function (req, res) {
         await pool.query(insertQuery, insertValues);
 
         res.send("Data added");
-        console.log('CID:', ipfs_cid);
-        console.log('Merkle Root:', merkleroot);
-        console.log("Transaction Successfull");
+        logger.info(`CID: ${ipfs_cid}`);
+        logger.info(`Merkle Root: ${merkleroot}`);
+        logger.info("Transaction Successful");
 
     } catch (error) {
-        console.log("Error", error);
+        logger.error(`Error: ${error.message}`);
         res.status(500).send("Error adding data");
     }
 });
-
 
 app.post('/verify', async function (req, res) {
     const { product_id } = req.body;
 
     try {
-        console.log("Please wait while we verify");
+        logger.info("Verifying product...");
+
         const data = await contract.methods.data(product_id).call();
         if (!data) {
+            logger.warn("Product not found in blockchain");
             return res.status(404).json({ message: 'Product not found' });
         }
 
@@ -247,6 +258,7 @@ app.post('/verify', async function (req, res) {
         const query = `SELECT * FROM product_verify WHERE product_id = $1`;
         const result = await pool.query(query, [product_id]);
         if (result.rows.length === 0) {
+            logger.warn("Product not found in database");
             return res.status(404).json({ message: 'Product not found in database' });
         }
 
@@ -266,22 +278,27 @@ app.post('/verify', async function (req, res) {
         const vmr = tree.getRoot(); // Merkle root as a Buffer
         const verifyMerkleRoot = "0x" + vmr.toString("hex");
 
-        console.log("Blockchain Merkle Root:", block_merkle);
-        console.log("Calculated Merkle Root:", verifyMerkleRoot);
+        logger.info(`Blockchain Merkle Root: ${block_merkle}`);
+        logger.info(`Calculated Merkle Root: ${verifyMerkleRoot}`);
 
         if (block_merkle === verifyMerkleRoot) {
-            console.log("Authentic Product");
+            logger.info("Authentic Product");
             res.json({ message: "Authentic Product" });
         } else {
-            console.log("Tampered Product");
+            logger.info("Tampered Product");
             res.json({ message: "Tampered Product" });
         }
     } catch (error) {
-        console.log("Error: ", error);
+        logger.error(`Error: ${error.message}`);
         res.status(500).send("Error verifying data");
     }
 });
 
+app.use((err, req, res, next) => {
+    logger.error(`Error: ${err.message}`);
+    res.status(500).json({ error: err.message || "Internal Server Error" });
+});
+
 app.listen(5000, function () {
-    console.log("Server is running on port 5000");
+    logger.info("Server is running on port 5000");
 });
