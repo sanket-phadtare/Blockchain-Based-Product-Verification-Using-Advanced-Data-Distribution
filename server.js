@@ -25,31 +25,112 @@ const pool = new Pool({
 
 const web3 = new Web3('https://rpc-amoy.polygon.technology/');
 const abi = [
-    {
-        "anonymous": false,
-        "inputs": [
-            { "indexed": true, "internalType": "uint256", "name": "p_id", "type": "uint256" },
-            { "indexed": false, "internalType": "string", "name": "p_merkleRoot", "type": "string" },
-            { "indexed": false, "internalType": "string", "name": "p_cid", "type": "string" }
-        ], "name": "ProductAdded", "type": "event"
-    },
-    {
-        "inputs": [
-            { "internalType": "uint256", "name": "p_id", "type": "uint256" },
-            { "internalType": "string", "name": "p_merkleRoot", "type": "string" },
-            { "internalType": "string", "name": "p_cid", "type": "string" }
-        ], "name": "addData", "outputs": [], "stateMutability": "nonpayable", "type": "function"
-    },
-    {
-        "inputs": [
-            { "internalType": "uint256", "name": "", "type": "uint256" }
-        ],
-        "name": "data", "outputs": [
-            { "internalType": "uint256", "name": "product_id", "type": "uint256" },
-            { "internalType": "string", "name": "merkleRoot", "type": "string" },
-            { "internalType": "string", "name": "cid", "type": "string" }
-        ], "stateMutability": "view", "type": "function"
-    }
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "p_id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "p_merkleRoot",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "string",
+				"name": "p_cid",
+				"type": "string"
+			}
+		],
+		"name": "addData",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "p_id",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "bytes32",
+				"name": "p_merkleRoot",
+				"type": "bytes32"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "p_cid",
+				"type": "string"
+			}
+		],
+		"name": "ProductAdded",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "data",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "product_id",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "merkleRoot",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "string",
+				"name": "cid",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "pr_id",
+				"type": "uint256"
+			}
+		],
+		"name": "getData",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
 ];
 
 const contract_address = process.env.CONTRACT_ADDRESS;
@@ -103,7 +184,9 @@ app.post('/add', async function (req, res) {
 
         const leaves = [leaf1, leaf2, leaf3, leaf4];
         const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
-        const merkleroot = tree.getRoot().toString('hex');
+        const mr = tree.getRoot(); // Merkle root as a Buffer
+        const merkleroot = "0x" + mr.toString("hex"); // Convert Buffer to a hex string prefixed with '0x'
+
 
         const ipfsData = {
             product_id,
@@ -122,7 +205,7 @@ app.post('/add', async function (req, res) {
         const nonce = await web3.eth.getTransactionCount(wallet_address);
         const txnObject = {
             to: contract_address,
-            gas: 8000000,
+            gas: 4000000,
             gasPrice: gasPrice,
             nonce: nonce,
             data: txnData
@@ -180,7 +263,8 @@ app.post('/verify', async function (req, res) {
 
         const leaves = [leaf1, leaf2, leaf3, leaf4];
         const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
-        const verifyMerkleRoot = tree.getRoot().toString('hex');
+        const vmr = tree.getRoot(); // Merkle root as a Buffer
+        const verifyMerkleRoot = "0x" + vmr.toString("hex");
 
         console.log("Blockchain Merkle Root:", block_merkle);
         console.log("Calculated Merkle Root:", verifyMerkleRoot);
