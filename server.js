@@ -7,13 +7,15 @@ import axios from 'axios';
 import { MerkleTree } from 'merkletreejs';
 import keccak256 from 'keccak256';
 import winston from 'winston';
+import Redis from 'ioredis';
 
 const { Pool } = pg;
 dotenv.config();
 const app = express();
 app.use(express.json());
 
-// Setup Winston logger
+const redisClient = new Redis();
+
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.json(),
@@ -35,24 +37,12 @@ const pool = new Pool({
 });
 
 const web3 = new Web3('https://rpc-amoy.polygon.technology/');
-const abi = [
+const abi =[
     {
         "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "p_id",
-                "type": "uint256"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "p_merkleRoot",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "string",
-                "name": "p_cid",
-                "type": "string"
-            }
+            { "internalType": "uint256", "name": "p_id", "type": "uint256" },
+            { "internalType": "bytes32", "name": "p_merkleRoot", "type": "bytes32" },
+            { "internalType": "string", "name": "p_cid", "type": "string" }
         ],
         "name": "addData",
         "outputs": [],
@@ -62,97 +52,52 @@ const abi = [
     {
         "anonymous": false,
         "inputs": [
-            {
-                "indexed": true,
-                "internalType": "uint256",
-                "name": "p_id",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "bytes32",
-                "name": "p_merkleRoot",
-                "type": "bytes32"
-            },
-            {
-                "indexed": false,
-                "internalType": "string",
-                "name": "p_cid",
-                "type": "string"
-            }
+            { "indexed": true, "internalType": "uint256", "name": "p_id", "type": "uint256" },
+            { "indexed": false, "internalType": "bytes32", "name": "p_merkleRoot", "type": "bytes32" },
+            { "indexed": false, "internalType": "string", "name": "p_cid", "type": "string" }
         ],
         "name": "ProductAdded",
         "type": "event"
     },
     {
         "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
+            { "internalType": "uint256", "name": "", "type": "uint256" }
         ],
         "name": "data",
         "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "product_id",
-                "type": "uint256"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "merkleRoot",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "string",
-                "name": "cid",
-                "type": "string"
-            }
+            { "internalType": "uint256", "name": "product_id", "type": "uint256" },
+            { "internalType": "bytes32", "name": "merkleRoot", "type": "bytes32" },
+            { "internalType": "string", "name": "cid", "type": "string" }
         ],
         "stateMutability": "view",
         "type": "function"
     },
     {
         "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "pr_id",
-                "type": "uint256"
-            }
+            { "internalType": "uint256", "name": "pr_id", "type": "uint256" }
         ],
         "name": "getData",
         "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-            }
+            { "internalType": "uint256", "name": "", "type": "uint256" },
+            { "internalType": "bytes32", "name": "", "type": "bytes32" },
+            { "internalType": "string", "name": "", "type": "string" }
         ],
         "stateMutability": "view",
         "type": "function"
     }
 ];
 
+
+
 const contract_address = process.env.CONTRACT_ADDRESS;
 const contract = new web3.eth.Contract(abi, contract_address);
 const private_key = process.env.PRIVATE_KEY;
 const wallet_address = process.env.WALLET_ADDRESS;
 
-// Salted hashing function
+
 function hashWithSalt(value) {
-    const salt = crypto.randomBytes(16).toString('hex'); // Generate random salt
-    const hash = keccak256(salt + value).toString('hex'); // Combine salt and value, then hash
+    const salt = crypto.randomBytes(16).toString('hex'); 
+    const hash = keccak256(salt + value).toString('hex'); 
     return { salt, hash };
 }
 
@@ -195,9 +140,8 @@ app.post('/add', async function (req, res) {
 
         const leaves = [leaf1, leaf2, leaf3, leaf4];
         const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
-        const mr = tree.getRoot(); // Merkle root as a Buffer
-        const merkleroot = "0x" + mr.toString("hex"); // Convert Buffer to a hex string prefixed with '0x'
-
+        const mr = tree.getRoot(); 
+        const merkleroot = "0x" + mr.toString("hex"); 
 
         const ipfsData = {
             product_id,
@@ -246,17 +190,36 @@ app.post('/verify', async function (req, res) {
     try {
         logger.info("Verifying product...");
 
-        const data = await contract.methods.data(product_id).call();
-        if (!data) {
-            logger.warn("Product not found in blockchain");
-            return res.status(404).json({ message: 'Product not found' });
+        const cacheKey = `product:${product_id}`;
+        let cachedData = await redisClient.get(cacheKey);
+
+        if (cachedData) {
+            logger.info("Cache hit for product data");
+            cachedData = JSON.parse(cachedData);
+        } else {
+            logger.info("Cache miss. Fetching data from blockchain");
+            const data = await contract.methods.data(product_id).call();
+
+            if (!data) {
+                logger.warn("Product not found in blockchain");
+                return res.status(404).json({ message: 'Product not found' });
+            }
+
+           
+            cachedData = JSON.parse(JSON.stringify(data, (key, value) =>
+                typeof value === 'bigint' ? value.toString() : value
+            ));
+
+         
+            await redisClient.set(cacheKey, JSON.stringify(cachedData), 'EX', 3600); 
         }
 
-        const block_merkle = data.merkleRoot;
-        const p_cid = data.cid;
+        const block_merkle = cachedData.merkleRoot;
+        const p_cid = cachedData.cid;
 
         const query = `SELECT * FROM product_verify WHERE product_id = $1`;
         const result = await pool.query(query, [product_id]);
+
         if (result.rows.length === 0) {
             logger.warn("Product not found in database");
             return res.status(404).json({ message: 'Product not found in database' });
@@ -278,12 +241,16 @@ app.post('/verify', async function (req, res) {
         const vmr = tree.getRoot(); // Merkle root as a Buffer
         const verifyMerkleRoot = "0x" + vmr.toString("hex");
 
-        logger.info(`Blockchain Merkle Root: ${block_merkle}`);
+        logger.info(`Blockchain Merkle Root: ${block_merkle.toString()}`);
         logger.info(`Calculated Merkle Root: ${verifyMerkleRoot}`);
 
         if (block_merkle === verifyMerkleRoot) {
             logger.info("Authentic Product");
-            res.json({ message: "Authentic Product" });
+            res.json({
+                message: "Authentic Product",
+                block_merkle,
+                verifyMerkleRoot
+            });
         } else {
             logger.info("Tampered Product");
             res.json({ message: "Tampered Product" });
@@ -293,6 +260,7 @@ app.post('/verify', async function (req, res) {
         res.status(500).send("Error verifying data");
     }
 });
+
 
 app.use((err, req, res, next) => {
     logger.error(`Error: ${err.message}`);

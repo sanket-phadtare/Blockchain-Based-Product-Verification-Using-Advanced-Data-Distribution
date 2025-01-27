@@ -3,6 +3,7 @@
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "ioredis": "^5.4.2",
     "ipfs-http-client": "^60.0.1",
     "keccak256": "^1.0.6",
     "merkletreejs": "^0.4.1",
