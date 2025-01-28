@@ -11,10 +11,23 @@ contract mverify {
     }
 
     mapping (uint256 => Data) public data;
+    address public owner;
+
 
     event ProductAdded(uint256 indexed p_id, bytes32 p_merkleRoot, string p_cid);
 
-    function addData(uint256 p_id, bytes32 p_merkleRoot, string memory p_cid) public {
+    constructor()
+    {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner()
+    {
+        require(msg.sender == owner, "Not authorized Entity");
+        _;
+    }
+
+    function addData(uint256 p_id, bytes32 p_merkleRoot, string memory p_cid) public onlyOwner {
         require(data[p_id].product_id == 0, "Product ID already exists");
         data[p_id] = Data(p_id, p_merkleRoot, p_cid);
         emit ProductAdded(p_id, p_merkleRoot, p_cid);
