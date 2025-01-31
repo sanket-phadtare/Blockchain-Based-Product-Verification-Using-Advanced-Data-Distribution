@@ -170,13 +170,14 @@ app.post('/add', async function (req, res) {
 
         logger.info("Connecting with Blockchain");
         const txnData = contract.methods.addData(product_id, merkleroot, ipfs_cid).encodeABI();
-        const gasPrice = await web3.eth.getGasPrice();
-        const nonce = await web3.eth.getTransactionCount(wallet_address);
+        const estimatedGas = Number(await contract.methods.addData(product_id, merkleroot, ipfs_cid).estimateGas({ from: wallet_address }));
+        const gasPrice = BigInt(await web3.eth.getGasPrice());
+        
         const txnObject = {
             to: contract_address,
-            gas: 4000000,
-            gasPrice: gasPrice,
-            nonce: nonce,
+            gas: Math.floor(estimatedGas * 1.2),
+            gasPrice: gasPrice.toString(), 
+            nonce: Number(await web3.eth.getTransactionCount(wallet_address)), 
             data: txnData
         };
 
@@ -224,7 +225,6 @@ app.post('/verify', async function (req, res) {
                 typeof value === 'bigint' ? value.toString() : value
             ));
 
-            // Check if product exists in the database before caching the data
             const query = `SELECT * FROM product_verify WHERE product_id = $1`;
             const result = await pool.query(query, [product_id]);
 
@@ -233,14 +233,13 @@ app.post('/verify', async function (req, res) {
                 return res.status(404).json({ message: 'Product not found in database' });
             }
 
-            // Cache the valid data only if the product exists in both blockchain and database
             await redisClient.set(cacheKey, JSON.stringify(cachedData), 'EX', 3600); 
         }
 
         const block_merkle = cachedData.merkleRoot;
         const p_cid = cachedData.cid;
 
-        // Query the database to fetch product verification salts
+        
         const query = `SELECT * FROM product_verify WHERE product_id = $1`;
         const result = await pool.query(query, [product_id]);
 
@@ -251,12 +250,11 @@ app.post('/verify', async function (req, res) {
 
         const { salt1, salt2, salt3, salt4 } = result.rows[0];
 
-        // Fetch the product data from IPFS using Pinata
+      
         const url = `https://gateway.pinata.cloud/ipfs/${p_cid}`;
         const response = await axios.get(url);
         const jsonData = response.data;
 
-        // Generate Merkle leaves based on salts and product data
         const leaf1 = keccak256(salt1 + product_id).toString('hex');
         const leaf2 = keccak256(salt2 + jsonData.product_name).toString('hex');
         const leaf3 = keccak256(salt3 + jsonData.product_mdate).toString('hex');
@@ -270,7 +268,6 @@ app.post('/verify', async function (req, res) {
         logger.info(`Blockchain Merkle Root: ${block_merkle.toString()}`);
         logger.info(`Calculated Merkle Root: ${verifyMerkleRoot}`);
 
-        // Verify if the Merkle root matches
         if (block_merkle === verifyMerkleRoot) {
             logger.info("Authentic Product");
             res.json({
