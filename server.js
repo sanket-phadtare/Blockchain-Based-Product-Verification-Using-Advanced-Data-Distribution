@@ -37,7 +37,7 @@ const pool = new Pool({
 });
 
 const web3 = new Web3('https://rpc-amoy.polygon.technology/');
-const abi =[
+const abi = [
     {
         "inputs": [
             { "internalType": "uint256", "name": "p_id", "type": "uint256" },
@@ -49,11 +49,7 @@ const abi =[
         "stateMutability": "nonpayable",
         "type": "function"
     },
-    {
-        "inputs": [],
-        "stateMutability": "nonpayable",
-        "type": "constructor"
-    },
+    { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
     {
         "anonymous": false,
         "inputs": [
@@ -65,9 +61,7 @@ const abi =[
         "type": "event"
     },
     {
-        "inputs": [
-            { "internalType": "uint256", "name": "", "type": "uint256" }
-        ],
+        "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
         "name": "data",
         "outputs": [
             { "internalType": "uint256", "name": "product_id", "type": "uint256" },
@@ -78,9 +72,7 @@ const abi =[
         "type": "function"
     },
     {
-        "inputs": [
-            { "internalType": "uint256", "name": "pr_id", "type": "uint256" }
-        ],
+        "inputs": [{ "internalType": "uint256", "name": "pr_id", "type": "uint256" }],
         "name": "getData",
         "outputs": [
             { "internalType": "uint256", "name": "", "type": "uint256" },
@@ -93,15 +85,11 @@ const abi =[
     {
         "inputs": [],
         "name": "owner",
-        "outputs": [
-            { "internalType": "address", "name": "", "type": "address" }
-        ],
+        "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
         "stateMutability": "view",
         "type": "function"
     }
 ];
-
-
 
 
 const contract_address = process.env.CONTRACT_ADDRESS;
@@ -109,10 +97,9 @@ const contract = new web3.eth.Contract(abi, contract_address);
 const private_key = process.env.PRIVATE_KEY;
 const wallet_address = process.env.WALLET_ADDRESS;
 
-
 function hashWithSalt(value) {
-    const salt = crypto.randomBytes(16).toString('hex'); 
-    const hash = keccak256(salt + value).toString('hex'); 
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = keccak256(salt + value).toString('hex');
     return { salt, hash };
 }
 
@@ -133,113 +120,87 @@ async function uploadToIPFS(data, retries = 3) {
     throw new Error("Failed to upload data to IPFS");
 }
 
+async function sendTransaction(txnData) {
+    try {
+        const estimatedGas = Number(await contract.methods.addData(...Object.values(txnData)).estimateGas({ from: wallet_address }));
+        const gasPrice = BigInt(await web3.eth.getGasPrice());
+
+        const txnObject = {
+            to: contract_address,
+            gas: Math.floor(estimatedGas * 1.2),
+            gasPrice: gasPrice.toString(),
+            nonce: Number(await web3.eth.getTransactionCount(wallet_address)),
+            data: contract.methods.addData(...Object.values(txnData)).encodeABI()
+        };
+
+        const signedTransaction = await web3.eth.accounts.signTransaction(txnObject, private_key);
+        const receipt = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+        return receipt;
+    } catch (error) {
+        logger.error(`Transaction failed: ${error.message}`);
+        throw error;
+    }
+}
+
 app.post('/add', async function (req, res) {
     try {
         const { product_id, product_name, product_mdate, product_batch } = req.body;
         logger.info("Calculating Merkle");
 
-        const saltedHash1 = hashWithSalt(product_id);
-        const saltedHash2 = hashWithSalt(product_name);
-        const saltedHash3 = hashWithSalt(product_mdate);
-        const saltedHash4 = hashWithSalt(product_batch);
+        const saltedHashes = [product_id, product_name, product_mdate, product_batch].map(hashWithSalt);
+        const salts = saltedHashes.map(hash => hash.salt);
+        const leaves = saltedHashes.map(hash => hash.hash);
 
-        const salt1 = saltedHash1.salt;
-        const salt2 = saltedHash2.salt;
-        const salt3 = saltedHash3.salt;
-        const salt4 = saltedHash4.salt;
-
-        const leaf1 = saltedHash1.hash;
-        const leaf2 = saltedHash2.hash;
-        const leaf3 = saltedHash3.hash;
-        const leaf4 = saltedHash4.hash;
-
-        const leaves = [leaf1, leaf2, leaf3, leaf4];
         const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
-        const mr = tree.getRoot(); 
-        const merkleroot = "0x" + mr.toString("hex"); 
+        const merkleroot = "0x" + tree.getRoot().toString("hex");
 
-        const ipfsData = {
-            product_id,
-            product_name,
-            product_mdate,
-            product_batch
-        };
+        const ipfsData = { product_id, product_name, product_mdate, product_batch };
         const ipfs_cid = await uploadToIPFS(ipfsData);
-
         logger.info("Data added to IPFS");
 
-        logger.info("Connecting with Blockchain");
-        const txnData = contract.methods.addData(product_id, merkleroot, ipfs_cid).encodeABI();
-        const estimatedGas = Number(await contract.methods.addData(product_id, merkleroot, ipfs_cid).estimateGas({ from: wallet_address }));
-        const gasPrice = BigInt(await web3.eth.getGasPrice());
-        
-        const txnObject = {
-            to: contract_address,
-            gas: Math.floor(estimatedGas * 1.2),
-            gasPrice: gasPrice.toString(), 
-            nonce: Number(await web3.eth.getTransactionCount(wallet_address)), 
-            data: txnData
-        };
-
-        logger.info("Transaction Under Process...");
-        const signedTransaction = await web3.eth.accounts.signTransaction(txnObject, private_key);
-        await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+        const txnData = { product_id, merkleroot, ipfs_cid };
+        const receipt = await sendTransaction(txnData);
+        logger.info(`Transaction successful with hash: ${receipt.transactionHash}`);
 
         const insertQuery = `INSERT INTO product_verify (product_id, product_name, product_mdate, product_batch, salt1, salt2, salt3, salt4) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
-        const insertValues = [product_id, product_name, product_mdate, product_batch, salt1, salt2, salt3, salt4];
+        const insertValues = [product_id, product_name, product_mdate, product_batch, ...salts];
         await pool.query(insertQuery, insertValues);
 
         res.send("Data added");
-        logger.info(`CID: ${ipfs_cid}`);
-        logger.info(`Merkle Root: ${merkleroot}`);
-        logger.info("Transaction Successful");
-
+        logger.info(`CID: ${ipfs_cid}, Merkle Root: ${merkleroot}`);
     } catch (error) {
         logger.error(`Error: ${error.message}`);
         res.status(500).send("Error adding data");
     }
 });
 
+
 app.post('/verify', async function (req, res) {
     const { product_id } = req.body;
-
     try {
         logger.info("Verifying product...");
-
         const cacheKey = `product:${product_id}`;
         let cachedData = await redisClient.get(cacheKey);
-
-        if (cachedData) {
-            logger.info("Cache hit for product data");
-            cachedData = JSON.parse(cachedData);
-        } else {
+        
+        if (!cachedData) {
             logger.info("Cache miss. Fetching data from blockchain");
             const data = await contract.methods.data(product_id).call();
 
-            if (!data) {
+            if (!data || data.product_id == 0) {
                 logger.warn("Product not found in blockchain");
                 return res.status(404).json({ message: 'Product not found' });
             }
-
-            cachedData = JSON.parse(JSON.stringify(data, (key, value) =>
-                typeof value === 'bigint' ? value.toString() : value
-            ));
-
-            const query = `SELECT * FROM product_verify WHERE product_id = $1`;
-            const result = await pool.query(query, [product_id]);
-
-            if (result.rows.length === 0) {
-                logger.warn("Product not found in database");
-                return res.status(404).json({ message: 'Product not found in database' });
-            }
-
-            await redisClient.set(cacheKey, JSON.stringify(cachedData), 'EX', 3600); 
+            
+            cachedData = JSON.stringify({
+                product_id: data.product_id.toString(),
+                merkleRoot: data.merkleRoot,
+                cid: data.cid
+            });
+            
+            await redisClient.set(cacheKey, cachedData, 'EX', 3600);
         }
-
-        const block_merkle = cachedData.merkleRoot;
-        const p_cid = cachedData.cid;
-
         
+        const { merkleRoot: block_merkle, cid: p_cid } = JSON.parse(cachedData);
         const query = `SELECT * FROM product_verify WHERE product_id = $1`;
         const result = await pool.query(query, [product_id]);
 
@@ -247,34 +208,23 @@ app.post('/verify', async function (req, res) {
             logger.warn("Product not found in database");
             return res.status(404).json({ message: 'Product not found in database' });
         }
-
+        
         const { salt1, salt2, salt3, salt4 } = result.rows[0];
-
-      
         const url = `https://gateway.pinata.cloud/ipfs/${p_cid}`;
         const response = await axios.get(url);
         const jsonData = response.data;
 
-        const leaf1 = keccak256(salt1 + product_id).toString('hex');
-        const leaf2 = keccak256(salt2 + jsonData.product_name).toString('hex');
-        const leaf3 = keccak256(salt3 + jsonData.product_mdate).toString('hex');
-        const leaf4 = keccak256(salt4 + jsonData.product_batch).toString('hex');
+        const leaves = [product_id, jsonData.product_name, jsonData.product_mdate, jsonData.product_batch]
+            .map((value, index) => keccak256([salt1, salt2, salt3, salt4][index] + value).toString('hex'));
 
-        const leaves = [leaf1, leaf2, leaf3, leaf4];
         const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
-        const vmr = tree.getRoot(); // Merkle root as a Buffer
-        const verifyMerkleRoot = "0x" + vmr.toString("hex");
+        const verifyMerkleRoot = "0x" + tree.getRoot().toString("hex");
 
-        logger.info(`Blockchain Merkle Root: ${block_merkle.toString()}`);
-        logger.info(`Calculated Merkle Root: ${verifyMerkleRoot}`);
-
+        logger.info(`Blockchain Merkle Root: ${block_merkle}, Calculated Merkle Root: ${verifyMerkleRoot}`);
+        
         if (block_merkle === verifyMerkleRoot) {
             logger.info("Authentic Product");
-            res.json({
-                message: "Authentic Product",
-                block_merkle,
-                verifyMerkleRoot
-            });
+            res.json({ message: "Authentic Product", block_merkle, verifyMerkleRoot });
         } else {
             logger.info("Tampered Product");
             res.json({ message: "Tampered Product" });
@@ -283,12 +233,6 @@ app.post('/verify', async function (req, res) {
         logger.error(`Error: ${error.message}`);
         res.status(500).send("Error verifying data");
     }
-});
-
-
-app.use((err, req, res, next) => {
-    logger.error(`Error: ${err.message}`);
-    res.status(500).json({ error: err.message || "Internal Server Error" });
 });
 
 app.listen(5000, function () {
