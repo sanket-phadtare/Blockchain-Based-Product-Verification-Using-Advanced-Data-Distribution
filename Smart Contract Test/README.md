@@ -1,4 +1,4 @@
-# mverify Smart Contract Testing
+# Smart Contract Testing
 
 ## Overview
 This test suite is designed to verify the functionality of the `mverify` smart contract using **Hardhat** and **Chai** assertions. The contract allows an owner to add and retrieve product data securely using **Merkle roots** and **IPFS CIDs**.
@@ -38,7 +38,6 @@ npx hardhat test
 - Attempts to retrieve data for a non-existing `productId`.
 - Ensures that it **fails with the correct error message** (`Product does not exist`).
 
-## License
-This project is licensed under the MIT License.
+
 
 
