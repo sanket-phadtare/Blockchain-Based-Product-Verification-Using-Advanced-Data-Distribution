@@ -1,0 +1,16 @@
+config:
+  target: "http://localhost:5000" 
+  phases:
+    - duration: 20  # Run the test for 20 seconds
+      arrivalRate: 1 # Send 1 requests per second
+
+scenarios:
+  - flow:
+      - post:
+          url: "/add"
+          json:
+            product_id: "{{ $randomNumber(100000, 999999) }}" 
+            product_name: "Product-{{ $uuid }}" 
+            product_batch: "Batch-{{ $randomNumber(1, 100) }}" 
+          expect:
+            - statusCode: 200 
